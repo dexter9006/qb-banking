@@ -114,25 +114,82 @@ end
 exports('AddMoney', AddMoney)
 exports('AddGangMoney', AddMoney)
 
+local pricePay = {}
 local function RemoveMoney(accountName, amount, reason)
     if not reason then reason = 'External Withdrawal' end
-    local newStatement = {
-        amount = amount,
-        reason = reason,
-        date = os.time() * 1000,
-        statement_type = 'withdraw'
-    }
+    
     if Accounts[accountName] then
         local accountToUpdate = Accounts[accountName]
         accountToUpdate.account_balance = accountToUpdate.account_balance - amount
-        if not Statements[accountName] then Statements[accountName] = {} end
-        Statements[accountName][#Statements[accountName] + 1] = newStatement
-        MySQL.insert.await('INSERT INTO bank_statements (account_name, amount, reason, statement_type) VALUES (?, ?, ?, ?)', { accountName, amount, reason, 'withdraw' })
         local updateSuccess = MySQL.update.await('UPDATE bank_accounts SET account_balance = account_balance - ? WHERE account_name = ?', { amount, accountName })
-        return updateSuccess
+        if not Statements[accountName] then Statements[accountName] = {} end
+        if reason == 'Salaire Employé' then
+            if pricePay[accountName] then
+                pricePay[accountName] = pricePay[accountName] + amount
+                MySQL.update('UPDATE bank_accounts SET salaire = salaire + ? WHERE account_name = ?', {amount, accountName }) 
+            else
+                local Salaire = MySQL.scalar.await('SELECT salaire from bank_accounts WHERE account_name = ?', { accountName })
+                pricePay[accountName] = amount + Salaire
+                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {pricePay[accountName], accountName }) 
+            end
+            return true
+        else
+            MySQL.insert.await('INSERT INTO bank_statements (account_name, amount, reason, statement_type) VALUES (?, ?, ?, ?)', { accountName, amount, reason, 'withdraw' })
+            local newStatement = {
+                amount = amount,
+                reason = reason,
+                date = os.time() * 1000,
+                statement_type = 'withdraw'
+            }
+            Statements[accountName][#Statements[accountName] + 1] = newStatement
+            return MySQL.update.await('UPDATE bank_accounts SET account_balance = account_balance - ? WHERE account_name = ?', { amount, accountName })
+        end
+        
     end
     return false
 end
+
+function PaimentState()
+
+    if pricePay then
+        for k,v in pairs(pricePay) do
+           -- print(k, v, pricePay[k], pricePay[v]) -- k = job | v = amount | pricePay[k] = amount | pricePay[v] = nil
+            if not Statements[k] then Statements[k] = {} end
+            if v ~= 0 then
+                MySQL.insert.await('INSERT INTO bank_statements (account_name, amount, reason, statement_type) VALUES (?, ?, ?, ?)', { k, v, 'Salaire Employé', 'withdraw' })
+                local newStatement = {
+                    amount = v,
+                    reason = 'Salaire Employé',
+                    date = os.time() * 1000,
+                    statement_type = 'withdraw'
+                }
+                Statements[k][#Statements[k] + 1] = newStatement
+                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k }) 
+                pricePay[k] = 0
+            else
+                local amount = MySQL.scalar.await('SELECT salaire from bank_accounts WHERE account_name = ?', { k })
+                if amount ~= v then
+                    MySQL.insert.await('INSERT INTO bank_statements (account_name, amount, reason, statement_type) VALUES (?, ?, ?, ?)', { k, v, 'Salaire Employé', 'withdraw' })
+                    local newStatement = {
+                    amount = v,
+                    reason = 'Salaire Employé',
+                    date = os.time() * 1000,
+                    statement_type = 'withdraw'
+                    }
+                    Statements[k][#Statements[k] + 1] = newStatement
+                    MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k }) 
+                    pricePay[k] = 0
+                end
+            end
+        end
+    end
+
+    SetTimeout(60 * (60 * 1000), PaimentState)
+
+end
+
+PaimentState()
+
 exports('RemoveMoney', RemoveMoney)
 exports('RemoveGangMoney', RemoveMoney)
 
@@ -159,6 +216,9 @@ QBCore.Functions.CreateCallback('qb-banking:server:openBank', function(source, c
     if not Player or not citizenid then return end
     local job = Player.PlayerData.job
     local gang = Player.PlayerData.gang
+    if Player.Functions.GetItemByName('cash') then
+        Player.PlayerData.money.cash = Player.Functions.GetItemByName('cash').amount
+    end
     local accounts = {}
     local statements = {}
     if job.name ~= 'unemployed' and not Accounts[job.name] then CreateJobAccount(job.name, 0) end
@@ -186,6 +246,9 @@ QBCore.Functions.CreateCallback('qb-banking:server:openATM', function(source, cb
     local src = source
     local Player, citizenid = getPlayerAndCitizenId(src)
     if not Player or not citizenid then return end
+    if Player.Functions.GetItemByName('cash') then
+        Player.PlayerData.money.cash = Player.Functions.GetItemByName('cash').amount
+    end
     local bankCards = Player.Functions.GetItemsByName('bank_card')
     if not bankCards then return TriggerClientEvent('QBCore:Notify', src, Lang:t('error.card'), 'error') end
     local acceptablePins = {}
@@ -244,6 +307,9 @@ QBCore.Functions.CreateCallback('qb-banking:server:deposit', function(source, cb
     local accountName = data.accountName
     local depositAmount = tonumber(data.amount)
     local reason = (data.reason ~= '' and data.reason) or 'Bank Deposit'
+    if Player.Functions.GetItemByName('cash') then
+        Player.PlayerData.money.cash = Player.Functions.GetItemByName('cash').amount
+    end
     if accountName == 'checking' then
         local accountBalance = Player.PlayerData.money.cash
         if accountBalance < depositAmount then return cb({ success = false, message = Lang:t('error.money') }) end
@@ -311,11 +377,13 @@ QBCore.Functions.CreateCallback('qb-banking:server:externalTransfer', function(s
     local job = Player.PlayerData.job
     local gang = Player.PlayerData.gang
     local toAccountName = data.toAccountNumber
-    local toPlayer = QBCore.Functions.GetPlayerByCitizenId(toAccountName)
-    if not toPlayer then return cb({ success = false, message = Lang:t('error.error') }) end
     local fromAccountName = data.fromAccountName
+    local toPlayer = QBCore.Functions.GetPlayerByCitizenId(toAccountName)
+    print(toAccountName, fromAccountName)
+    if not toPlayer then return cb({ success = false, message = Lang:t('error.error') }) end
     local transferAmount = tonumber(data.amount)
     local reason = (data.reason ~= '' and data.reason) or 'External transfer'
+    print(toAccountName, fromAccountName)
     if fromAccountName == 'checking' then
         if Player.PlayerData.money.bank < transferAmount then return cb({ success = false, message = Lang:t('error.money') }) end
         Player.Functions.RemoveMoney('bank', transferAmount, reason)
