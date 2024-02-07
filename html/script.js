@@ -72,7 +72,7 @@ const bankingApp = Vue.createApp({
                     id: statement.id,
                     date: statement.date,
                     reason: statement.reason,
-                    amount: statement.amount,
+                    amount: statement.amount.toLocaleString(),
                     type: statement.statement_type,
                     user: statement.citizenid,
                 }));
@@ -427,10 +427,10 @@ const bankingApp = Vue.createApp({
             const month = (date.getMonth() + 1).toString().padStart(2, "0");
             const day = date.getDate().toString().padStart(2, "0");
             const year = date.getFullYear();
-            return `${month}/${day}/${year}`;
+            return `${day}/${month}/${year}`;
         },
         balanceClass(statementType) {
-            return statementType === "deposit" ? "positive-balance" : "negative-balance";
+            return statementType === "deposit" ? "positive-balance-statement" : "negative-balance";
         },
         handleMessage(event) {
             const action = event.data.action;
