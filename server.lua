@@ -277,7 +277,7 @@ QBCore.Functions.CreateCallback('qb-banking:server:withdraw', function(source, c
     if not Player or not citizenid then return cb({ success = false, message = Lang:t('error.error') }) end
     local accountName = data.accountName
     local withdrawAmount = tonumber(data.amount)
-    local reason = (data.reason ~= '' and data.reason) or 'Bank Withdrawal'
+    local reason = (data.reason ~= '' and data.reason) or 'Retrait'
     if accountName == 'checking' then
         local accountBalance = Player.PlayerData.money.bank
         if accountBalance < withdrawAmount then return cb({ success = false, message = Lang:t('error.money') }) end
@@ -306,7 +306,7 @@ QBCore.Functions.CreateCallback('qb-banking:server:deposit', function(source, cb
     if not Player or not citizenid then return cb({ success = false, message = Lang:t('error.error') }) end
     local accountName = data.accountName
     local depositAmount = tonumber(data.amount)
-    local reason = (data.reason ~= '' and data.reason) or 'Bank Deposit'
+    local reason = (data.reason ~= '' and data.reason) or 'Dépôt'
     if Player.Functions.GetItemByName('cash') then
         Player.PlayerData.money.cash = Player.Functions.GetItemByName('cash').amount
     end
@@ -339,7 +339,7 @@ QBCore.Functions.CreateCallback('qb-banking:server:internalTransfer', function(s
     local fromAccountName = data.fromAccountName
     local toAccountName = data.toAccountName
     local transferAmount = tonumber(data.amount)
-    local reason = (data.reason ~= '' and data.reason) or 'Internal transfer'
+    local reason = (data.reason ~= '' and data.reason) or 'Virement Interne'
     if fromAccountName == 'checking' then
         if Player.PlayerData.money.bank < transferAmount then return cb({ success = false, message = Lang:t('error.money') }) end
         Player.Functions.RemoveMoney('bank', transferAmount, reason)
@@ -382,7 +382,7 @@ QBCore.Functions.CreateCallback('qb-banking:server:externalTransfer', function(s
     print(toAccountName, fromAccountName)
     if not toPlayer then return cb({ success = false, message = Lang:t('error.error') }) end
     local transferAmount = tonumber(data.amount)
-    local reason = (data.reason ~= '' and data.reason) or 'External transfer'
+    local reason = (data.reason ~= '' and data.reason) or 'Virement Externe'
     print(toAccountName, fromAccountName)
     if fromAccountName == 'checking' then
         if Player.PlayerData.money.bank < transferAmount then return cb({ success = false, message = Lang:t('error.money') }) end
