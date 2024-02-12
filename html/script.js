@@ -76,6 +76,7 @@ const bankingApp = Vue.createApp({
                     type: statement.statement_type,
                     user: statement.citizenid,
                 }));
+                this.statements[accountKey].reverse();
             });
             this.isBankOpen = true;
         },
