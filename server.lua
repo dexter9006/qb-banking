@@ -117,20 +117,19 @@ exports('AddGangMoney', AddMoney)
 local pricePay = {}
 local function RemoveMoney(accountName, amount, reason)
     if not reason then reason = 'External Withdrawal' end
-    
+
     if Accounts[accountName] then
         local accountToUpdate = Accounts[accountName]
         accountToUpdate.account_balance = accountToUpdate.account_balance - amount
-        local updateSuccess = MySQL.update.await('UPDATE bank_accounts SET account_balance = account_balance - ? WHERE account_name = ?', { amount, accountName })
         if not Statements[accountName] then Statements[accountName] = {} end
         if reason == 'Salaire Employé' then
             if pricePay[accountName] then
                 pricePay[accountName] = pricePay[accountName] + amount
-                MySQL.update('UPDATE bank_accounts SET salaire = salaire + ? WHERE account_name = ?', {amount, accountName }) 
+                MySQL.update('UPDATE bank_accounts SET salaire = salaire + ? WHERE account_name = ?', {amount, accountName })
             else
                 local Salaire = MySQL.scalar.await('SELECT salaire from bank_accounts WHERE account_name = ?', { accountName })
                 pricePay[accountName] = amount + Salaire
-                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {pricePay[accountName], accountName }) 
+                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {pricePay[accountName], accountName })
             end
             return true
         else
@@ -144,7 +143,7 @@ local function RemoveMoney(accountName, amount, reason)
             Statements[accountName][#Statements[accountName] + 1] = newStatement
             return MySQL.update.await('UPDATE bank_accounts SET account_balance = account_balance - ? WHERE account_name = ?', { amount, accountName })
         end
-        
+
     end
     return false
 end
@@ -164,7 +163,7 @@ function PaimentState()
                     statement_type = 'withdraw'
                 }
                 Statements[k][#Statements[k] + 1] = newStatement
-                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k }) 
+                MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k })
                 pricePay[k] = 0
             else
                 local amount = MySQL.scalar.await('SELECT salaire from bank_accounts WHERE account_name = ?', { k })
@@ -177,7 +176,7 @@ function PaimentState()
                     statement_type = 'withdraw'
                     }
                     Statements[k][#Statements[k] + 1] = newStatement
-                    MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k }) 
+                    MySQL.update('UPDATE bank_accounts SET salaire = ? WHERE account_name = ?', {0, k })
                     pricePay[k] = 0
                 end
             end
